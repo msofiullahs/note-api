@@ -12,6 +12,21 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
+/**
+ * Application user.
+ *
+ * Authenticates against the API via Sanctum personal access tokens and owns
+ * a collection of {@see Note} records.
+ *
+ * @property int $id
+ * @property string $name
+ * @property string $email
+ * @property \Illuminate\Support\Carbon|null $email_verified_at
+ * @property string $password
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Note> $notes
+ */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -20,7 +35,10 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
-     * Get the attributes that should be cast.
+     * Attribute casts.
+     *
+     * `password` uses the `hashed` cast so values assigned to it are bcrypt-hashed
+     * automatically, removing the need for manual `Hash::make()` calls on assignment.
      *
      * @return array<string, string>
      */
@@ -32,6 +50,11 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Notes belonging to this user.
+     *
+     * @return HasMany<Note, $this>
+     */
     public function notes(): HasMany
     {
         return $this->hasMany(Note::class);
