@@ -25,9 +25,16 @@ class NoteController extends Controller implements HasMiddleware
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $notes = $request->user()->notes()->latest()->get();
+        $perPage = min(max((int) $request->input('per_page', 15), 1), 100);
 
-        return NoteResource::collection($notes);
+        $query = $request->user()->notes()->latest();
+
+        $search = trim((string) $request->input('search', ''));
+        if ($search !== '') {
+            $query->where('title', 'like', '%'.$search.'%');
+        }
+
+        return NoteResource::collection($query->paginate($perPage));
     }
 
     public function store(StoreNoteRequest $request): JsonResponse
