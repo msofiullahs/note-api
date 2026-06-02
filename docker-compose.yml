@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    image: note-api:local
+    container_name: note-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+      - /app/vendor
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: sqlite
