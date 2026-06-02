@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreNoteRequest;
 use App\Http\Requests\UpdateNoteRequest;
-use App\Http\Resources\NoteResource;
 use App\Models\Note;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -20,11 +20,15 @@ use Illuminate\Routing\Controllers\Middleware;
  * Authorization is enforced two ways:
  *   1. `auth:sanctum` middleware rejects unauthenticated requests with 401.
  *   2. {@see \App\Policies\NotePolicy} ensures users can only act on notes
- *      they own — cross-user access returns 403.
+ *      they own — cross-user access returns 403. The policy is bound to
+ *      the model via the {@see \Illuminate\Database\Eloquent\Attributes\UsePolicy}
+ *      attribute on {@see Note}.
  *
- * Listing endpoints are paginated and support a `search` filter on the
- * title. Deletes are soft (handled by the `SoftDeletes` trait on
- * {@see Note}).
+ * The search filter on `index` is implemented as the `whereTitleLike`
+ * scope on {@see Note} rather than inline, so the same filter is reusable
+ * (and testable) from anywhere a builder is available. Resources are
+ * resolved through `toResource()` / `toResourceCollection()`, which read
+ * the `#[UseResource]` attribute on the model.
  */
 class NoteController extends Controller implements HasMiddleware
 {
@@ -46,25 +50,23 @@ class NoteController extends Controller implements HasMiddleware
      * Route: `GET /api/notes` (auth:sanctum)
      *
      * Query parameters:
-     *   - `search` (string, optional)  Case-insensitive LIKE filter on title.
-     *   - `per_page` (int, optional)   Page size, clamped to 1..100 (default 15).
-     *   - `page` (int, optional)       Page number (default 1).
+     *   - `search`   (string, optional) Case-insensitive LIKE filter on title.
+     *   - `per_page` (int, optional)    Page size, clamped to 1..100 (default 15).
+     *   - `page`     (int, optional)    Page number (default 1).
      *
-     * @return AnonymousResourceCollection Paginated collection wrapped in
-     *                                     `{data, links, meta}`.
+     * @return ResourceCollection Paginated collection wrapped in
+     *                            `{data, links, meta}`.
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): ResourceCollection
     {
         $perPage = min(max((int) $request->input('per_page', 15), 1), 100);
 
-        $query = $request->user()->notes()->latest();
-
-        $search = trim((string) $request->input('search', ''));
-        if ($search !== '') {
-            $query->where('title', 'like', '%'.$search.'%');
-        }
-
-        return NoteResource::collection($query->paginate($perPage));
+        return $request->user()
+            ->notes()
+            ->latest()
+            ->whereTitleLike((string) $request->input('search', ''))
+            ->paginate($perPage)
+            ->toResourceCollection();
     }
 
     /**
@@ -79,7 +81,7 @@ class NoteController extends Controller implements HasMiddleware
     {
         $note = $request->user()->notes()->create($request->validated());
 
-        return (new NoteResource($note))->response()->setStatusCode(201);
+        return $note->toResource()->response()->setStatusCode(201);
     }
 
     /**
@@ -87,14 +89,17 @@ class NoteController extends Controller implements HasMiddleware
      *
      * Route: `GET /api/notes/{note}` (auth:sanctum)
      *
-     * @return NoteResource 200 with the note. 403 if the note belongs to
+     * The concrete resource type is {@see \App\Http\Resources\NoteResource},
+     * resolved via the `#[UseResource]` attribute on {@see Note}.
+     *
+     * @return JsonResource 200 with the note. 403 if the note belongs to
      *                      another user, 404 if it does not exist.
      */
-    public function show(Note $note): NoteResource
+    public function show(Note $note): JsonResource
     {
         $this->authorize('view', $note);
 
-        return new NoteResource($note);
+        return $note->toResource();
     }
 
     /**
@@ -105,17 +110,17 @@ class NoteController extends Controller implements HasMiddleware
      * Both `title` and `content` are optional on update (validated with the
      * `sometimes` rule). Omitted fields are left untouched.
      *
-     * @return NoteResource 200 with the updated note. 403 if owned by
+     * @return JsonResource 200 with the updated note. 403 if owned by
      *                      another user, 404 if not found, 422 on invalid
      *                      input.
      */
-    public function update(UpdateNoteRequest $request, Note $note): NoteResource
+    public function update(UpdateNoteRequest $request, Note $note): JsonResource
     {
         $this->authorize('update', $note);
 
         $note->update($request->validated());
 
-        return new NoteResource($note);
+        return $note->toResource();
     }
 
     /**
