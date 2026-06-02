@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreNoteRequest;
+use App\Http\Requests\UpdateNoteRequest;
 use App\Http\Resources\NoteResource;
 use App\Models\Note;
 use Illuminate\Http\JsonResponse;
@@ -28,14 +30,9 @@ class NoteController extends Controller implements HasMiddleware
         return NoteResource::collection($notes);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreNoteRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'content' => ['required', 'string'],
-        ]);
-
-        $note = $request->user()->notes()->create($data);
+        $note = $request->user()->notes()->create($request->validated());
 
         return (new NoteResource($note))->response()->setStatusCode(201);
     }
@@ -47,16 +44,11 @@ class NoteController extends Controller implements HasMiddleware
         return new NoteResource($note);
     }
 
-    public function update(Request $request, Note $note): NoteResource
+    public function update(UpdateNoteRequest $request, Note $note): NoteResource
     {
         $this->authorize('update', $note);
 
-        $data = $request->validate([
-            'title' => ['sometimes', 'required', 'string', 'max:255'],
-            'content' => ['sometimes', 'required', 'string'],
-        ]);
-
-        $note->update($data);
+        $note->update($request->validated());
 
         return new NoteResource($note);
     }
